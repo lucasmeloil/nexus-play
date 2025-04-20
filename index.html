@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus Player - Professional Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0d1b2a, #1b263b);
+      font-family: 'Inter', sans-serif;
+      color: #ffffff;
+      overflow: hidden;
+    }
+    .neon-glow {
+      box-shadow: 0 0 8px #00f6ff, 0 0 16px #ff00ff;
+      transition: all 0.3s ease;
+    }
+    .neon-glow:hover {
+      box-shadow: 0 0 12px #00f6ff, 0 0 24px #ff00ff;
+    }
+    .bg-glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: -1;
+    }
+    button {
+      outline: none;
+    }
+    #videoPlayer {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .active-mode {
+      background-color: #ff00ff;
+      box-shadow: 0 0 12px #ff00ff;
+    }
+    .favorite-btn {
+      transition: transform 0.2s ease;
+    }
+    .favorite-btn.favorited {
+      color: #ff00ff;
+      transform: scale(1.2);
+    }
+    #toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      animation: fadeInOut 3s ease forwards;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateY(-10px); }
+      10% { opacity: 1; transform: translateY(0); }
+      90% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-10px); }
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="h-screen flex items-center justify-center">
+  <!-- Canvas para partículas de fundo -->
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- Tela de inicialização -->
+  <div id="startScreen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-glass p-8 rounded-lg neon-glow">
+      <h2 class="text-2xl font-semibold text-cyan-300 mb-4">Nexus Player</h2>
+      <p class="text-sm text-gray-300 mb-6">Inicie o player para desfrutar de sua música e vídeos com uma experiência futurística.</p>
+      <button id="startPlayer" class="bg-cyan-500 text-white px-6 py-2 rounded-lg neon-glow" aria-label="Iniciar Player">Iniciar Player</button>
+    </div>
+  </div>
+
+  <!-- Toast para notificações -->
+  <div id="toast" class="hidden bg-glass p-4 rounded-lg neon-glow"></div>
+
+  <div id="playerContainer" class="bg-glass w-full max-w-5xl p-6 rounded-lg neon-glow hidden">
+    <!-- Cabeçalho -->
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-semibold text-cyan-300">Nexus Player</h1>
+      <div class="space-x-2">
+        <button id="favoritesBtn" class="bg-yellow-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Ver Favoritos">Favoritos</button>
+        <button id="memoryBtn" class="bg-purple-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Sonificar Texto">Sonificar Texto</button>
+      </div>
+    </div>
+
+    <!-- Área Principal -->
+    <div class="flex">
+      <!-- Playlist -->
+      <div class="w-1/3 bg-glass p-4 rounded-lg">
+        <h2 class="text-lg font-medium text-cyan-300 mb-2">Playlist</h2>
+        <ul id="playlist" class="text-sm h-64 overflow-y-auto"></ul>
+        <div class="mt-2 flex space-x-2">
+          <button id="addMedia" class="bg-cyan-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Adicionar Mídia">Adicionar Mídia</button>
+          <button id="clearPlaylist" class="bg-pink-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Limpar Playlist">Limpar</button>
+        </div>
+      </div>
+
+      <!-- Controles e Visualizador -->
+      <div class="w-2/3 ml-4">
+        <!-- Visualizador 3D ou Vídeo -->
+        <div id="mediaContainer" class="h-48 bg-black rounded-lg mb-4 relative">
+          <div id="visualizer" class="w-full h-full"></div>
+          <video id="videoPlayer" class="hidden" controls></video>
+        </div>
+
+        <!-- Informações e Controles -->
+        <div class="bg-glass p-4 rounded-lg">
+          <div id="nowPlaying" class="text-sm text-white mb-2">Nenhuma mídia selecionada</div>
+          <div id="errorMessage" class="text-red-400 text-sm mb-2 hidden"></div>
+          <audio id="audioPlayer" class="hidden"></audio>
+          <div class="mb-4">
+            <input type="range" id="progressBar" min="0" max="100" value="0" class="w-full accent-cyan-500" aria-label="Barra de Progresso">
+            <div class="flex justify-between text-xs text-gray-300">
+              <span id="currentTime">0:00</span>
+              <span id="duration">0:00</span>
+            </div>
+          </div>
+          <div class="flex justify-center space-x-2 mb-4">
+            <button id="prevBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Mídia Anterior">⏮</button>
+            <button id="playPauseBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Play/Pause">▶</button>
+            <button id="nextBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Próxima Mídia">⏭</button>
+            <button id="repeatBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" title="Repetir" aria-label="Alternar Repetição">↻</button>
+            <button id="shuffleBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" title="Aleatório" aria-label="Alternar Aleatório">🔀</button>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-sm text-gray-300">Volume:</span>
+              <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1" class="w-24 accent-cyan-500" aria-label="Controle de Volume">
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-sm text-gray-300">Velocidade:</span>
+              <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1" class="w-24 accent-cyan-500" aria-label="Controle de Velocidade">
+              <span id="speedValue" class="text-sm text-gray-300">1.0x</span>
+            </div>
+            <select id="eqPreset" class="bg-cyan-500 text-white px-3 py-1 rounded-lg neon-glow" aria-label="Seletor de Equalizador">
+              <option value="flat">Padrão</option>
+              <option value="pop">Pop</option>
+              <option value="rock">Rock</option>
+              <option value="jazz">Jazz</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input para upload de arquivos -->
+  <input type="file" id="fileInput" accept="audio/mp3,audio/wav,video/mp4,video/webm" multiple class="hidden">
+
+  <!-- Modal para Sonificação de Texto -->
+  <div id="memoryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-glass p-6 rounded-lg neon-glow">
+      <h2 class="text-lg font-medium text-cyan-300 mb-4">Sonificar Texto</h2>
+      <textarea id="memoryText" class="w-full h-32 bg-gray-800 text-white p-2 rounded-lg" placeholder="Digite um texto para transformar em música..." aria-label="Texto para Sonificação"></textarea>
+      <div class="mt-4 flex space-x-2">
+        <button id="generateMusic" class="bg-cyan-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Gerar Música">Gerar Música</button>
+        <button id="cancelMemory" class="bg-gray-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Cancelar">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Favoritos -->
+  <div id="favoritesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-glass p-6 rounded-lg neon-glow w-full max-w-md">
+      <h2 class="text-lg font-medium text-cyan-300 mb-4">Favoritos</h2>
+      <ul id="favoritesList" class="text-sm h-64 overflow-y-auto mb-4"></ul>
+      <button id="closeFavorites" class="bg-gray-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Fechar Favoritos">Fechar</button>
+    </div>
+  </div>
+
+  <script>
+    const audioPlayer = document.getElementById('audioPlayer');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const progressBar = document.getElementById('progressBar');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const repeatBtn = document.getElementById('repeatBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const currentTime = document.getElementById('currentTime');
+    const duration = document.getElementById('duration');
+    const nowPlaying = document.getElementById('nowPlaying');
+    const playlist = document.getElementById('playlist');
+    const addMedia = document.getElementById('addMedia');
+    const clearPlaylist = document.getElementById('clearPlaylist');
+    const fileInput = document.getElementById('fileInput');
+    const memoryBtn = document.getElementById('memoryBtn');
+    const memoryModal = document.getElementById('memoryModal');
+    const memoryText = document.getElementById('memoryText');
+    const generateMusic = document.getElementById('generateMusic');
+    const cancelMemory = document.getElementById('cancelMemory');
+    const visualizer = document.getElementById('visualizer');
+    const mediaContainer = document.getElementById('mediaContainer');
+    const startScreen = document.getElementById('startScreen');
+    const startPlayer = document.getElementById('startPlayer');
+    const playerContainer = document.getElementById('playerContainer');
+    const errorMessage = document.getElementById('errorMessage');
+    const eqPreset = document.getElementById('eqPreset');
+    const favoritesBtn = document.getElementById('favoritesBtn');
+    const favoritesModal = document.getElementById('favoritesModal');
+    const favoritesList = document.getElementById('favoritesList');
+    const closeFavorites = document.getElementById('closeFavorites');
+    const toast = document.getElementById('toast');
+
+    let tracks = JSON.parse(localStorage.getItem('nexusPlaylist')) || [];
+    let favorites = JSON.parse(localStorage.getItem('nexusFavorites')) || [];
+    let currentTrackIndex = -1;
+    let isPlaying = false;
+    let audioContext, analyser, source, frequencyData, biquadFilter;
+    let scene, camera, renderer, bars;
+    let repeatMode = 'none';
+    let shuffleMode = false;
+    let currentPlayer = null;
+
+    // Funções auxiliares
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60);
+      const sec = Math.floor(seconds % 60);
+      return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorMessage.classList.remove('hidden');
+      setTimeout(() => errorMessage.classList.add('hidden'), 5000);
+    }
+
+    function showToast(msg, type = 'success') {
+      toast.textContent = msg;
+      toast.className = `bg-glass p-4 rounded-lg neon-glow ${type === 'success' ? 'text-green-400' : 'text-red-400'}`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    function updatePlaylistUI() {
+      playlist.innerHTML = '';
+      tracks.forEach((track, index) => {
+        const li = document.createElement('li');
+        const isFavorite = favorites.some(fav => fav.url === track.url);
+        li.className = `flex justify-between items-center p-2 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20 ${index === currentTrackIndex ? 'bg-cyan-500 bg-opacity-30' : ''}`;
+        li.innerHTML = `
+          <span onclick="playTrack(${index})">${track.name}</span>
+          <button class="favorite-btn ${isFavorite ? 'favorited' : ''}" onclick="toggleFavorite(${index})" aria-label="${isFavorite ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}">❤️</button>
+        `;
+        playlist.appendChild(li);
+      });
+      localStorage.setItem('nexusPlaylist', JSON.stringify(tracks));
+      updateFavoritesUI();
+    }
+
+    function updateFavoritesUI() {
+      favoritesList.innerHTML = '';
+      favorites.forEach((fav, index) => {
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center p-2 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20';
+        li.innerHTML = `
+          <span onclick="playFavorite(${index})">${fav.name}</span>
+          <button class="text-red-400" onclick="removeFavorite(${index})" aria-label="Remover dos Favoritos">🗑️</button>
+        `;
+        favoritesList.appendChild(li);
+      });
+      localStorage.setItem('nexusFavorites', JSON.stringify(favorites));
+    }
+
+    function toggleFavorite(index) {
+      const track = tracks[index];
+      const isFavorite = favorites.some(fav => fav.url === track.url);
+      if (isFavorite) {
+        favorites = favorites.filter(fav => fav.url !== track.url);
+        showToast(`Removido de favoritos: ${track.name}`, 'error');
+      } else {
+        favorites.push(track);
+        showToast(`Adicionado aos favoritos: ${track.name}`);
+      }
+      updatePlaylistUI();
+    }
+
+    function removeFavorite(index) {
+      const fav = favorites[index];
+      favorites.splice(index, 1);
+      showToast(`Removido de favoritos: ${fav.name}`, 'error');
+      updateFavoritesUI();
+    }
+
+    function playFavorite(index) {
+      const fav = favorites[index];
+      const trackIndex = tracks.findIndex(track => track.url === fav.url);
+      if (trackIndex === -1) {
+        tracks.push(fav);
+        updatePlaylistUI();
+        playTrack(tracks.length - 1);
+      } else {
+        playTrack(trackIndex);
+      }
+      favoritesModal.classList.add('hidden');
+    }
+
+    function shufflePlaylist() {
+      if (currentTrackIndex === -1) return;
+      const currentTrack = tracks[currentTrackIndex];
+      const otherTracks = tracks.filter((_, i) => i !== currentTrackIndex);
+      for (let i = otherTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+      }
+      tracks = [currentTrack, ...otherTracks];
+      currentTrackIndex = 0;
+      updatePlaylistUI();
+    }
+
+    async function loadTrack(index) {
+      if (index < 0 || index >= tracks.length) return;
+      currentTrackIndex = index;
+      const track = tracks[index];
+      visualizer.classList.toggle('hidden', track.isVideo);
+      videoPlayer.classList.toggle('hidden', !track.isVideo);
+
+      if (track.isVideo) {
+        currentPlayer = videoPlayer;
+        videoPlayer.src = track.url;
+        audioPlayer.src = '';
+      } else {
+        currentPlayer = audioPlayer;
+        audioPlayer.src = track.url;
+        videoPlayer.src = '';
+      }
+
+      nowPlaying.textContent = `Tocando: ${track.name}`;
+      updatePlaylistUI();
+
+      try {
+        await currentPlayer.play();
+        isPlaying = true;
+        playPauseBtn.textContent = '⏸';
+        if (!track.isVideo) setupAudioAnalysis();
+      } catch (err) {
+        showError('Erro ao reproduzir mídia: ' + err.message);
+        isPlaying = false;
+        playPauseBtn.textContent = '▶';
+      }
+    }
+
+    function playTrack(index) {
+      loadTrack(index);
+    }
+
+    function togglePlayPause() {
+      if (!currentPlayer) return;
+      if (isPlaying) {
+        currentPlayer.pause();
+        isPlaying = false;
+        playPauseBtn.textContent = '▶';
+      } else {
+        currentPlayer.play().then(() => {
+          isPlaying = true;
+          playPauseBtn.textContent = '⏸';
+        }).catch(err => {
+          showError('Erro ao reproduzir: ' + err.message);
+        });
+      }
+    }
+
+    function nextTrack() {
+      if (shuffleMode) {
+        const nextIndex = Math.floor(Math.random() * tracks.length);
+        loadTrack(nextIndex);
+      } else if (currentTrackIndex < tracks.length - 1) {
+        loadTrack(currentTrackIndex + 1);
+      } else if (repeatMode === 'all') {
+        loadTrack(0);
+      }
+    }
+
+    function prevTrack() {
+      if (currentTrackIndex > 0) {
+        loadTrack(currentTrackIndex - 1);
+      } else if (repeatMode === 'all') {
+        loadTrack(tracks.length - 1);
+      }
+    }
+
+    // Visualizador 3D
+    function setupVisualizer() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, visualizer.offsetWidth / visualizer.offsetHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(visualizer.offsetWidth, visualizer.offsetHeight);
+      visualizer.appendChild(renderer.domElement);
+
+      bars = [];
+      const barCount = 16;
+      for (let i = 0; i < barCount; i++) {
+        const geometry = new THREE.BoxGeometry(0.2, 1, 0.2);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00f6ff });
+        const bar = new THREE.Mesh(geometry, material);
+        bar.position.x = (i - barCount / 2) * 0.3;
+        scene.add(bar);
+        bars.push(bar);
+      }
+
+      camera.position.z = 5;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        if (frequencyData && !tracks[currentTrackIndex]?.isVideo) {
+          bars.forEach((bar, i) => {
+            const scale = frequencyData[i] / 255 * 2;
+            bar.scale.y = Math.max(0.1, scale);
+            bar.material.color.setHSL(i / bars.length, 1, 0.5);
+          });
+        }
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    // Análise de Áudio
+    function setupAudioAnalysis() {
+      if (!audioContext && !tracks[currentTrackIndex]?.isVideo) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        source = audioContext.createMediaElementSource(audioPlayer);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 128;
+        frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        applyEQ(eqPreset.value);
+      }
+    }
+
+    // Equalizador
+    function applyEQ(preset) {
+      if (!audioContext || tracks[currentTrackIndex]?.isVideo) return;
+      if (biquadFilter) {
+        source.disconnect();
+        biquadFilter.disconnect();
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+      }
+
+      if (preset === 'flat') return;
+
+      biquadFilter = audioContext.createBiquadFilter();
+      source.disconnect();
+      source.connect(biquadFilter);
+      biquadFilter.connect(analyser);
+      analyser.connect(audioContext.destination);
+
+      switch (preset) {
+        case 'pop':
+          biquadFilter.type = 'highshelf';
+          biquadFilter.frequency.setValueAtTime(1000, audioContext.currentTime);
+          biquadFilter.gain.setValueAtTime(5, audioContext.currentTime);
+          break;
+        case 'rock':
+          biquadFilter.type = 'lowshelf';
+          biquadFilter.frequency.setValueAtTime(500, audioContext.currentTime);
+          biquadFilter.gain.setValueAtTime(5, audioContext.currentTime);
+          break;
+        case 'jazz':
+          biquadFilter.type = 'peaking';
+          biquadFilter.frequency.setValueAtTime(2000, audioContext.currentTime);
+          biquadFilter.gain.setValueAtTime(3, audioContext.currentTime);
+          break;
+      }
+    }
+
+    // Partículas de fundo
+    function setupBackground() {
+      const canvas = document.getElementById('bgCanvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const particles = [];
+      for (let i = 0; i < 50; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 2 + 1,
+          vx: Math.random() * 1 - 0.5,
+          vy: Math.random() * 1 - 0.5,
+          baseColor: `hsl(${Math.random() * 360}, 100%, 50%)`
+        });
+      }
+
+      function animateParticles() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+          if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = frequencyData && !tracks[currentTrackIndex]?.isVideo ? `hsl(${frequencyData[0] / 255 * 360}, 100%, 50%)` : p.baseColor;
+          ctx.fill();
+        });
+        requestAnimationFrame(animateParticles);
+      }
+      animateParticles();
+    }
+
+    // Sonificação de Texto
+    function sonifyText(text) {
+      if (!text.trim()) {
+        showError('Por favor, insira um texto para sonificar.');
+        return;
+      }
+
+      const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88];
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.type = 'sine';
+
+      const words = text.trim().split(/\s+/);
+      let time = audioContext.currentTime;
+      words.forEach((word, i) => {
+        const noteIndex = word.length % notes.length;
+        oscillator.frequency.setValueAtTime(notes[noteIndex], time);
+        gainNode.gain.setValueAtTime(0.5, time);
+        gainNode.gain.setValueAtTime(0, time + 0.2);
+        time += 0.3;
+      });
+
+      try {
+        oscillator.start();
+        oscillator.stop(time);
+        memoryModal.classList.add('hidden');
+        showToast('Música gerada com sucesso!');
+      } catch (err) {
+        showError('Erro ao gerar música: ' + err.message);
+      }
+    }
+
+    // Atualizar progresso
+    function updateProgress() {
+      if (!currentPlayer) return;
+      if (currentPlayer.duration && !isNaN(currentPlayer.duration)) {
+        const progress = (currentPlayer.currentTime / currentPlayer.duration) * 100;
+        progressBar.value = progress;
+        currentTime.textContent = formatTime(currentPlayer.currentTime);
+        duration.textContent = formatTime(currentPlayer.duration);
+      }
+      if (analyser && !tracks[currentTrackIndex]?.isVideo) {
+        analyser.getByteFrequencyData(frequencyData);
+      }
+    }
+
+    // Controles de repetição
+    function toggleRepeat() {
+      if (repeatMode === 'none') {
+        repeatMode = 'one';
+        repeatBtn.innerHTML = '↺';
+        repeatBtn.classList.add('active-mode');
+      } else if (repeatMode === 'one') {
+        repeatMode = 'all';
+        repeatBtn.innerHTML = '🔁';
+      } else {
+        repeatMode = 'none';
+        repeatBtn.innerHTML = '↻';
+        repeatBtn.classList.remove('active-mode');
+      }
+    }
+
+    // Controles de shuffle
+    function toggleShuffle() {
+      shuffleMode = !shuffleMode;
+      shuffleBtn.classList.toggle('active-mode', shuffleMode);
+      if (shuffleMode) shufflePlaylist();
+      else updatePlaylistUI();
+    }
+
+    // Event Listeners
+    startPlayer.addEventListener('click', () => {
+      startScreen.classList.add('hidden');
+      playerContainer.classList.remove('hidden');
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    });
+
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    nextBtn.addEventListener('click', nextTrack);
+    prevBtn.addEventListener('click', prevTrack);
+    repeatBtn.addEventListener('click', toggleRepeat);
+    shuffleBtn.addEventListener('click', toggleShuffle);
+
+    [audioPlayer, videoPlayer].forEach(player => {
+      player.addEventListener('timeupdate', updateProgress);
+      player.addEventListener('ended', () => {
+        if (repeatMode === 'one') {
+          loadTrack(currentTrackIndex);
+        } else {
+          nextTrack();
+        }
+      });
+      player.addEventListener('error', () => {
+        showError('');
+      });
+    });
+
+    progressBar.addEventListener('input', () => {
+      if (currentPlayer?.duration && !isNaN(currentPlayer.duration)) {
+        currentPlayer.currentTime = (progressBar.value / 100) * currentPlayer.duration;
+      }
+    });
+
+    volumeSlider.addEventListener('input', () => {
+      if (currentPlayer) currentPlayer.volume = volumeSlider.value;
+    });
+
+    speedSlider.addEventListener('input', () => {
+      const speed = parseFloat(speedSlider.value);
+      speedValue.textContent = `${speed.toFixed(1)}x`;
+      if (currentPlayer) currentPlayer.playbackRate = speed;
+    });
+
+    addMedia.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      files.forEach(file => {
+        const isAudio = file.type === 'audio/mpeg' || file.type === 'audio/wav';
+        const isVideo = file.type === 'video/mp4' || file.type === 'video/webm';
+        if (isAudio || isVideo) {
+          const url = URL.createObjectURL(file);
+          tracks.push({
+            name: file.name,
+            url: url,
+            isVideo: isVideo,
+            bpm: isAudio ? Math.floor(Math.random() * 120 + 60) : null
+          });
+          showToast(`Adicionada mídia: ${file.name}`);
+        } else {
+          showError(`Arquivo ${file.name} não suportado. Use MP3, WAV, MP4 ou WebM.`);
+        }
+      });
+
+      updatePlaylistUI();
+      if (tracks.length === files.length && currentTrackIndex === -1) {
+        playTrack(0);
+      }
+      fileInput.value = '';
+    });
+
+    clearPlaylist.addEventListener('click', () => {
+      tracks.forEach(track => URL.revokeObjectURL(track.url));
+      favorites.forEach(fav => URL.revokeObjectURL(fav.url));
+      tracks = [];
+      favorites = [];
+      currentTrackIndex = -1;
+      currentPlayer = null;
+      audioPlayer.src = '';
+      videoPlayer.src = '';
+      nowPlaying.textContent = 'Nenhuma mídia selecionada';
+      isPlaying = false;
+      playPauseBtn.textContent = '▶';
+      visualizer.classList.remove('hidden');
+      videoPlayer.classList.add('hidden');
+      updatePlaylistUI();
+      showToast('Playlist e favoritos limpos', 'error');
+    });
+
+    memoryBtn.addEventListener('click', () => memoryModal.classList.toggle('hidden'));
+    generateMusic.addEventListener('click', () => sonifyText(memoryText.value));
+    cancelMemory.addEventListener('click', () => {
+      memoryModal.classList.add('hidden');
+      memoryText.value = '';
+    });
+
+    eqPreset.addEventListener('change', (e) => {
+      if (!tracks[currentTrackIndex]?.isVideo) {
+        applyEQ(e.target.value);
+        showToast(`Equalizador: ${e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1)}`);
+      } else {
+        showError('Equalizador não disponível para vídeos.');
+      }
+    });
+
+    favoritesBtn.addEventListener('click', () => {
+      favoritesModal.classList.toggle('hidden');
+      updateFavoritesUI();
+    });
+
+    closeFavorites.addEventListener('click', () => {
+      favoritesModal.classList.add('hidden');
+    });
+
+    // Inicializar
+    updatePlaylistUI();
+    setupVisualizer();
+    setupBackground();
+  </script>
+</body>
+</html>
