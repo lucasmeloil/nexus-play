@@ -8,6 +8,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0d1b2a">
     <title>Nexus Player</title>
+
+    <!-- Favicon -->
+  <link rel="icon" type="image/png" href="logo-nexusPlayer-removebg-preview.png">
   
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="logo-nexusPlayer-removebg-preview.png">
@@ -170,7 +173,7 @@
         <!-- Botões -->
         <div class="flex gap-2">
           <button id="favoritesBtn" class="bg-yellow-500 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Ver Favoritos">Favoritos</button>
-          <button id="memoryBtn" class="bg-purple-500 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Sonificar Texto">Sonificar</button>
+          <button id="memoryBtn" class="bg-purple-501 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Sonificar Texto">Sonificar</button>
         </div>
       </div>
       
@@ -697,7 +700,7 @@
         }
       });
       player.addEventListener('error', () => {
-        showError('Erro na mídia');
+        showError('');
       });
     });
 
