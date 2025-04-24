@@ -2,8 +2,14 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nexus Player - Professional Edition</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1b2a">
+  <title>Nexus Player</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192x192.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <style>
@@ -11,7 +17,8 @@
       background: linear-gradient(135deg, #0d1b2a, #1b263b);
       font-family: 'Inter', sans-serif;
       color: #ffffff;
-      overflow: hidden;
+      margin: 0;
+      overflow-x: hidden;
     }
     .neon-glow {
       box-shadow: 0 0 8px #00f6ff, 0 0 16px #ff00ff;
@@ -26,37 +33,70 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
     canvas {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       z-index: -1;
     }
     button {
       outline: none;
+      font-size: clamp(14px, 4vw, 16px);
+      padding: clamp(8px, 2vw, 10px) clamp(12px, 3vw, 16px);
     }
     #videoPlayer {
       width: 100%;
-      height: 100%;
+      height: auto;
+      max-height: 50vh;
       object-fit: contain;
       border-radius: 8px;
     }
-    .active-mode {
-      background-color: #ff00ff;
-      box-shadow: 0 0 12px #ff00ff;
+    #mediaContainer {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
     }
-    .favorite-btn {
-      transition: transform 0.2s ease;
+    #mediaContainer #videoPlayer,
+    #mediaContainer #visualizer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
-    .favorite-btn.favorited {
-      color: #ff00ff;
-      transform: scale(1.2);
+    .touch-friendly {
+      height: 10px;
+      -webkit-appearance: none;
+      appearance: none;
+      border-radius: 5px;
+      background: #4a5568;
+    }
+    .touch-friendly::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #00f6ff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .touch-friendly::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #00f6ff;
+      border-radius: 50%;
+      cursor: pointer;
     }
     #toast {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 16px;
+      right: 16px;
       z-index: 1000;
       animation: fadeInOut 3s ease forwards;
+    }
+    .modal-content {
+      max-height: 80vh;
+      overflow-y: auto;
     }
     @keyframes fadeInOut {
       0% { opacity: 0; transform: translateY(-10px); }
@@ -64,91 +104,97 @@
       90% { opacity: 1; transform: translateY(0); }
       100% { opacity: 0; transform: translateY(-10px); }
     }
+    @media (max-width: 640px) {
+      #playerContainer {
+        padding-bottom: 80px;
+      }
+      .modal-content {
+        max-height: 90vh;
+      }
+    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="h-screen flex items-center justify-center">
+<body class="min-h-screen flex flex-col">
   <!-- Canvas para partículas de fundo -->
   <canvas id="bgCanvas"></canvas>
 
   <!-- Tela de inicialização -->
-  <div id="startScreen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-    <div class="bg-glass p-8 rounded-lg neon-glow">
-      <h2 class="text-2xl font-semibold text-cyan-300 mb-4">Nexus Player</h2>
-      <p class="text-sm text-gray-300 mb-6">Inicie o player para desfrutar de sua música e vídeos com uma experiência futurística.</p>
-      <button id="startPlayer" class="bg-cyan-500 text-white px-6 py-2 rounded-lg neon-glow" aria-label="Iniciar Player">Iniciar Player</button>
+  <div id="startScreen" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+    <div class="bg-glass p-6 sm:p-8 rounded-xl neon-glow w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold text-cyan-300 mb-4">Nexus Player</h2>
+      <p class="text-sm sm:text-base text-gray-300 mb-6">Toque sua música e vídeos com uma experiência imersiva.</p>
+      <button id="startPlayer" class="bg-cyan-500 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-lg neon-glow w-full text-sm sm:text-base" aria-label="Iniciar Player">Iniciar</button>
     </div>
   </div>
 
   <!-- Toast para notificações -->
-  <div id="toast" class="hidden bg-glass p-4 rounded-lg neon-glow"></div>
+  <div id="toast" class="hidden bg-glass p-3 rounded-lg neon-glow text-sm sm:text-base"></div>
 
-  <div id="playerContainer" class="bg-glass w-full max-w-5xl p-6 rounded-lg neon-glow hidden">
-    <!-- Cabeçalho -->
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-2xl font-semibold text-cyan-300">Nexus Player</h1>
-      <div class="space-x-2">
-        <button id="favoritesBtn" class="bg-yellow-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Ver Favoritos">Favoritos</button>
-        <button id="memoryBtn" class="bg-purple-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Sonificar Texto">Sonificar Texto</button>
+  <!-- Container do Player -->
+  <div id="playerContainer" class="w-full max-w-6xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-4 hidden">
+    <!-- Playlist (Mobile: abaixo, Desktop: esquerda) -->
+    <div class="lg:w-1/3 bg-glass p-4 sm:p-5 rounded-xl order-2 lg:order-1">
+      <h2 class="text-lg sm:text-xl font-semibold text-cyan-300 mb-3">Playlist</h2>
+      <ul id="playlist" class="text-sm sm:text-base max-h-96 overflow-y-auto mb-4"></ul>
+      <div class="flex gap-2">
+        <button id="addMedia" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow flex-1 text-sm sm:text-base" aria-label="Adicionar Mídia">Adicionar</button>
+        <button id="clearPlaylist" class="bg-pink-500 text-white px-4 py-2 rounded-lg neon-glow flex-1 text-sm sm:text-base" aria-label="Limpar Playlist">Limpar</button>
       </div>
     </div>
 
-    <!-- Área Principal -->
-    <div class="flex">
-      <!-- Playlist -->
-      <div class="w-1/3 bg-glass p-4 rounded-lg">
-        <h2 class="text-lg font-medium text-cyan-300 mb-2">Playlist</h2>
-        <ul id="playlist" class="text-sm h-64 overflow-y-auto"></ul>
-        <div class="mt-2 flex space-x-2">
-          <button id="addMedia" class="bg-cyan-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Adicionar Mídia">Adicionar Mídia</button>
-          <button id="clearPlaylist" class="bg-pink-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Limpar Playlist">Limpar</button>
+    <!-- Player (Mobile: topo, Desktop: direita) -->
+    <div class="lg:w-2/3 flex flex-col gap-4 order-1 lg:order-2">
+      <!-- Cabeçalho -->
+      <div class="flex justify-between items-center">
+        <h1 class="text-xl sm:text-2xl font-bold text-cyan-300">Nexus Player</h1>
+        <div class="flex gap-2">
+          <button id="favoritesBtn" class="bg-yellow-500 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Ver Favoritos">Favoritos</button>
+          <button id="memoryBtn" class="bg-purple-500 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Sonificar Texto">Sonificar</button>
         </div>
       </div>
 
-      <!-- Controles e Visualizador -->
-      <div class="w-2/3 ml-4">
-        <!-- Visualizador 3D ou Vídeo -->
-        <div id="mediaContainer" class="h-48 bg-black rounded-lg mb-4 relative">
-          <div id="visualizer" class="w-full h-full"></div>
-          <video id="videoPlayer" class="hidden" controls></video>
-        </div>
+      <!-- Visualizador ou Vídeo -->
+      <div id="mediaContainer" class="bg-black rounded-xl overflow-hidden">
+        <div id="visualizer" class="w-full h-full"></div>
+        <video id="videoPlayer" class="hidden" controls></video>
+      </div>
 
-        <!-- Informações e Controles -->
-        <div class="bg-glass p-4 rounded-lg">
-          <div id="nowPlaying" class="text-sm text-white mb-2">Nenhuma mídia selecionada</div>
-          <div id="errorMessage" class="text-red-400 text-sm mb-2 hidden"></div>
-          <audio id="audioPlayer" class="hidden"></audio>
-          <div class="mb-4">
-            <input type="range" id="progressBar" min="0" max="100" value="0" class="w-full accent-cyan-500" aria-label="Barra de Progresso">
-            <div class="flex justify-between text-xs text-gray-300">
-              <span id="currentTime">0:00</span>
-              <span id="duration">0:00</span>
-            </div>
+      <!-- Controles -->
+      <div class="bg-glass p-4 sm:p-5 rounded-xl">
+        <div id="nowPlaying" class="text-sm sm:text-base text-white mb-3 truncate">Nenhuma mídia selecionada</div>
+        <div id="errorMessage" class="text-red-400 text-sm mb-3 hidden"></div>
+        <audio id="audioPlayer" class="hidden"></audio>
+        <div class="mb-4">
+          <input type="range" id="progressBar" min="0" max="100" value="0" class="w-full accent-cyan-500 h-6 sm:h-8 touch-friendly" aria-label="Barra de Progresso">
+          <div class="flex justify-between text-xs sm:text-sm text-gray-300">
+            <span id="currentTime">0:00</span>
+            <span id="duration">0:00</span>
           </div>
-          <div class="flex justify-center space-x-2 mb-4">
-            <button id="prevBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Mídia Anterior">⏮</button>
-            <button id="playPauseBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Play/Pause">▶</button>
-            <button id="nextBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" aria-label="Próxima Mídia">⏭</button>
-            <button id="repeatBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" title="Repetir" aria-label="Alternar Repetição">↻</button>
-            <button id="shuffleBtn" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow" title="Aleatório" aria-label="Alternar Aleatório">🔀</button>
+        </div>
+        <div class="flex justify-center gap-2 sm:gap-4 mb-4">
+          <button id="prevBtn" class="bg-cyan-500 text-white p-3 sm:p-4 rounded-lg neon-glow text-lg sm:text-xl" aria-label="Mídia Anterior">⏮</button>
+          <button id="playPauseBtn" class="bg-cyan-500 text-white p-3 sm:p-4 rounded-lg neon-glow text-lg sm:text-xl" aria-label="Play/Pause">▶</button>
+          <button id="nextBtn" class="bg-cyan-500 text-white p-3 sm:p-4 rounded-lg neon-glow text-lg sm:text-xl" aria-label="Próxima Mídia">⏭</button>
+          <button id="repeatBtn" class="bg-cyan-500 text-white p-3 sm:p-4 rounded-lg neon-glow text-lg sm:text-xl" title="Repetir" aria-label="Alternar Repetição">↻</button>
+          <button id="shuffleBtn" class="bg-cyan-500 text-white p-3 sm:p-4 rounded-lg neon-glow text-lg sm:text-xl" title="Aleatório" aria-label="Alternar Aleatório">🔀</button>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm sm:text-base text-gray-300">Volume:</span>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1" class="w-20 sm:w-24 accent-cyan-500 h-6 sm:h-8 touch-friendly" aria-label="Controle de Volume">
           </div>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <span class="text-sm text-gray-300">Volume:</span>
-              <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1" class="w-24 accent-cyan-500" aria-label="Controle de Volume">
-            </div>
-            <div class="flex items-center space-x-2">
-              <span class="text-sm text-gray-300">Velocidade:</span>
-              <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1" class="w-24 accent-cyan-500" aria-label="Controle de Velocidade">
-              <span id="speedValue" class="text-sm text-gray-300">1.0x</span>
-            </div>
-            <select id="eqPreset" class="bg-cyan-500 text-white px-3 py-1 rounded-lg neon-glow" aria-label="Seletor de Equalizador">
-              <option value="flat">Padrão</option>
-              <option value="pop">Pop</option>
-              <option value="rock">Rock</option>
-              <option value="jazz">Jazz</option>
-            </select>
+          <div class="flex items-center gap-2">
+            <span class="text-sm sm:text-base text-gray-300">Velocidade:</span>
+            <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1" class="w-20 sm:w-24 accent-cyan-500 h-6 sm:h-8 touch-friendly" aria-label="Controle de Velocidade">
+            <span id="speedValue" class="text-sm sm:text-base text-gray-300">1.0x</span>
           </div>
+          <select id="eqPreset" class="bg-cyan-500 text-white px-3 py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Seletor de Equalizador">
+            <option value="flat">Padrão</option>
+            <option value="pop">Pop</option>
+            <option value="rock">Rock</option>
+            <option value="jazz">Jazz</option>
+          </select>
         </div>
       </div>
     </div>
@@ -157,24 +203,24 @@
   <!-- Input para upload de arquivos -->
   <input type="file" id="fileInput" accept="audio/mp3,audio/wav,video/mp4,video/webm" multiple class="hidden">
 
-  <!-- Modal para Sonificação de Texto -->
-  <div id="memoryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-    <div class="bg-glass p-6 rounded-lg neon-glow">
-      <h2 class="text-lg font-medium text-cyan-300 mb-4">Sonificar Texto</h2>
-      <textarea id="memoryText" class="w-full h-32 bg-gray-800 text-white p-2 rounded-lg" placeholder="Digite um texto para transformar em música..." aria-label="Texto para Sonificação"></textarea>
-      <div class="mt-4 flex space-x-2">
-        <button id="generateMusic" class="bg-cyan-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Gerar Música">Gerar Música</button>
-        <button id="cancelMemory" class="bg-gray-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Cancelar">Cancelar</button>
+  <!-- Modal para Sonificação -->
+  <div id="memoryModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden p-4">
+    <div class="bg-glass p-4 sm:p-6 rounded-xl neon-glow w-full max-w-sm sm:max-w-md modal-content">
+      <h2 class="text-lg sm:text-xl font-semibold text-cyan-300 mb-3">Sonificar Texto</h2>
+      <textarea id="memoryText" class="w-full h-32 bg-gray-800 text-white p-2 rounded-lg text-sm sm:text-base" placeholder="Digite um texto para transformar em música..." aria-label="Texto para Sonificação"></textarea>
+      <div class="mt-4 flex gap-2">
+        <button id="generateMusic" class="bg-cyan-500 text-white px-4 py-2 rounded-lg neon-glow flex-1 text-sm sm:text-base" aria-label="Gerar Música">Gerar</button>
+        <button id="cancelMemory" class="bg-gray-500 text-white px-4 py-2 rounded-lg neon-glow flex-1 text-sm sm:text-base" aria-label="Cancelar">Cancelar</button>
       </div>
     </div>
   </div>
 
   <!-- Modal para Favoritos -->
-  <div id="favoritesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-    <div class="bg-glass p-6 rounded-lg neon-glow w-full max-w-md">
-      <h2 class="text-lg font-medium text-cyan-300 mb-4">Favoritos</h2>
-      <ul id="favoritesList" class="text-sm h-64 overflow-y-auto mb-4"></ul>
-      <button id="closeFavorites" class="bg-gray-500 text-white px-4 py-1 rounded-lg neon-glow" aria-label="Fechar Favoritos">Fechar</button>
+  <div id="favoritesModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden p-4">
+    <div class="bg-glass p-4 sm:p-6 rounded-xl neon-glow w-full max-w-sm sm:max-w-md modal-content">
+      <h2 class="text-lg sm:text-xl font-semibold text-cyan-300 mb-3">Favoritos</h2>
+      <ul id="favoritesList" class="text-sm sm:text-base max-h-64 overflow-y-auto mb-4"></ul>
+      <button id="closeFavorites" class="bg-gray-500 text-white px-4 py-2 rounded-lg neon-glow w-full text-sm sm:text-base" aria-label="Fechar Favoritos">Fechar</button>
     </div>
   </div>
 
@@ -240,7 +286,7 @@
 
     function showToast(msg, type = 'success') {
       toast.textContent = msg;
-      toast.className = `bg-glass p-4 rounded-lg neon-glow ${type === 'success' ? 'text-green-400' : 'text-red-400'}`;
+      toast.className = `bg-glass p-3 rounded-lg neon-glow ${type === 'success' ? 'text-green-400' : 'text-red-400'}`;
       toast.classList.remove('hidden');
       setTimeout(() => toast.classList.add('hidden'), 3000);
     }
@@ -248,12 +294,12 @@
     function updatePlaylistUI() {
       playlist.innerHTML = '';
       tracks.forEach((track, index) => {
-        const li = document.createElement('li');
         const isFavorite = favorites.some(fav => fav.url === track.url);
-        li.className = `flex justify-between items-center p-2 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20 ${index === currentTrackIndex ? 'bg-cyan-500 bg-opacity-30' : ''}`;
+        const li = document.createElement('li');
+        li.className = `flex justify-between items-center p-2 sm:p-3 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20 rounded-lg ${index === currentTrackIndex ? 'bg-cyan-500 bg-opacity-30' : ''}`;
         li.innerHTML = `
-          <span onclick="playTrack(${index})">${track.name}</span>
-          <button class="favorite-btn ${isFavorite ? 'favorited' : ''}" onclick="toggleFavorite(${index})" aria-label="${isFavorite ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}">❤️</button>
+          <span class="truncate flex-1" onclick="playTrack(${index})">${track.name}</span>
+          <button class="favorite-btn ${isFavorite ? 'text-pink-500 scale-110' : 'text-gray-300'} p-2" onclick="toggleFavorite(${index})" aria-label="${isFavorite ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}">❤️</button>
         `;
         playlist.appendChild(li);
       });
@@ -265,10 +311,10 @@
       favoritesList.innerHTML = '';
       favorites.forEach((fav, index) => {
         const li = document.createElement('li');
-        li.className = 'flex justify-between items-center p-2 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20';
+        li.className = 'flex justify-between items-center p-2 sm:p-3 cursor-pointer hover:bg-cyan-500 hover:bg-opacity-20 rounded-lg';
         li.innerHTML = `
-          <span onclick="playFavorite(${index})">${fav.name}</span>
-          <button class="text-red-400" onclick="removeFavorite(${index})" aria-label="Remover dos Favoritos">🗑️</button>
+          <span class="truncate flex-1" onclick="playFavorite(${index})">${fav.name}</span>
+          <button class="text-red-400 p-2" onclick="removeFavorite(${index})" aria-label="Remover dos Favoritos">🗑️</button>
         `;
         favoritesList.appendChild(li);
       });
@@ -394,11 +440,25 @@
 
     // Visualizador 3D
     function setupVisualizer() {
+      if (window.innerWidth < 640) {
+        visualizer.innerHTML = '<div class="text-center text-gray-300 text-sm sm:text-base p-4">Visualizador 3D desativado em dispositivos móveis</div>';
+        return;
+      }
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(75, visualizer.offsetWidth / visualizer.offsetHeight, 0.1, 1000);
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(visualizer.offsetWidth, visualizer.offsetHeight);
       visualizer.appendChild(renderer.domElement);
+
+      function resizeVisualizer() {
+        const width = visualizer.offsetWidth;
+        const height = visualizer.offsetHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+      resizeVisualizer();
+      window.addEventListener('resize', resizeVisualizer);
 
       bars = [];
       const barCount = 16;
@@ -482,11 +542,17 @@
     function setupBackground() {
       const canvas = document.getElementById('bgCanvas');
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
 
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      const particleCount = window.innerWidth < 640 ? 20 : 50;
       const particles = [];
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < particleCount; i++) {
         particles.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
@@ -567,21 +633,21 @@
       if (repeatMode === 'none') {
         repeatMode = 'one';
         repeatBtn.innerHTML = '↺';
-        repeatBtn.classList.add('active-mode');
+        repeatBtn.classList.add('bg-pink-500');
       } else if (repeatMode === 'one') {
         repeatMode = 'all';
         repeatBtn.innerHTML = '🔁';
       } else {
         repeatMode = 'none';
         repeatBtn.innerHTML = '↻';
-        repeatBtn.classList.remove('active-mode');
+        repeatBtn.classList.remove('bg-pink-500');
       }
     }
 
     // Controles de shuffle
     function toggleShuffle() {
       shuffleMode = !shuffleMode;
-      shuffleBtn.classList.toggle('active-mode', shuffleMode);
+      shuffleBtn.classList.toggle('bg-pink-500', shuffleMode);
       if (shuffleMode) shufflePlaylist();
       else updatePlaylistUI();
     }
@@ -609,7 +675,7 @@
         }
       });
       player.addEventListener('error', () => {
-        showError('');
+        showError('Erro na mídia');
       });
     });
 
@@ -703,6 +769,13 @@
     closeFavorites.addEventListener('click', () => {
       favoritesModal.classList.add('hidden');
     });
+
+    // Inicializar PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.error('Service Worker registration failed:', err));
+      });
+    }
 
     // Inicializar
     updatePlaylistUI();
