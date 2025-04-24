@@ -118,21 +118,24 @@
 <body class="min-h-screen flex flex-col">
   <!-- Canvas para partículas de fundo -->
   <canvas id="bgCanvas"></canvas>
-
   <div id="startScreen" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
     <div class="bg-glass p-6 sm:p-8 rounded-xl neon-glow w-full max-w-sm sm:max-w-md">
       
-      <!-- Logo Nexus Player -->
+      <!-- Logo Nexus Player sem link -->
       <div class="flex justify-center mb-4">
-        <a href="https://imgbb.com/" target="_blank">
-          <img src="https://i.ibb.co/gZzv8HNR/logo-nexus-Player-removebg-preview.png" alt="Nexus Player Logo" class="h-12 sm:h-16">
-        </a>
+        <img src="https://i.ibb.co/gZzv8HNR/logo-nexus-Player-removebg-preview.png" alt="Nexus Player Logo" class="h-12 sm:h-16">
       </div>
   
-      <p class="text-sm sm:text-base text-gray-300 mb-6">Toque sua música e vídeos com uma experiência imersiva.</p>
+      <!-- Texto centralizado -->
+      <div class="flex flex-col items-center text-center mb-6">
+        <p class="text-sm sm:text-base text-gray-300">Toque sua música e vídeos com uma experiência imersiva.</p>
+      </div>
+  
+      <!-- Botão iniciar -->
       <button id="startPlayer" class="bg-cyan-500 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-lg neon-glow w-full text-sm sm:text-base" aria-label="Iniciar Player">Iniciar</button>
     </div>
   </div>
+  
   
 
   <!-- Toast para notificações -->
@@ -154,10 +157,10 @@
     <div class="lg:w-2/3 flex flex-col gap-4 order-1 lg:order-2">
       <!-- Cabeçalho -->
       <div class="flex justify-between items-center">
-        <!-- Logo Nexus Player -->
-        <a href="https://imgbb.com/" target="_blank" class="flex items-center">
+        <!-- Logo Nexus Player sem link -->
+        <div class="flex items-center">
           <img src="https://i.ibb.co/gZzv8HNR/logo-nexus-Player-removebg-preview.png" alt="Nexus Player Logo" class="h-10 sm:h-12">
-        </a>
+        </div>
         
         <!-- Botões -->
         <div class="flex gap-2">
@@ -165,6 +168,7 @@
           <button id="memoryBtn" class="bg-purple-500 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg neon-glow text-sm sm:text-base" aria-label="Sonificar Texto">Sonificar</button>
         </div>
       </div>
+      
       
 
       <!-- Visualizador ou Vídeo -->
